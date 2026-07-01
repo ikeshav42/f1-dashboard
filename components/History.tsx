@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Leaderboard from "./Leaderboard"
 import LapChart from "./LapChart"
 import { LeaderboardSkeleton } from "./Skeleton"
+import RaceControlCard, { RcMessage } from "./RaceControlCard"
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? ""
 
@@ -52,6 +53,7 @@ export default function History() {
   const [lapData, setLapData]           = useState<{ drivers: any[]; events: any[] } | null>(null)
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null)
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
+  const [rcMessages, setRcMessages]     = useState<RcMessage[]>([])
   const [loading, setLoading]           = useState(false)
   const [loadingChart, setLoadingChart] = useState(false)
   const [view, setView]                 = useState<ViewMode>("results")
@@ -96,12 +98,18 @@ export default function History() {
     setSelectedSession(s)
     setDrivers([])
     setLapData(null)
+    setRcMessages([])
     setError("")
     setView("results")
     setLoading(true)
     try {
-      const res = await fetch(API + "/api/history/leaderboard?session_key=" + s.session_key, { cache: "no-store" })
-      setDrivers(await res.json())
+      const [lbRes, rcRes] = await Promise.all([
+        fetch(API + "/api/history/leaderboard?session_key=" + s.session_key, { cache: "no-store" }),
+        fetch(API + "/api/history/race_control?session_key=" + s.session_key),
+      ])
+      const [lb, rc] = await Promise.all([lbRes.json(), rcRes.json()])
+      setDrivers(lb)
+      setRcMessages(rc)
     } catch {
       setError("Could not load session data")
     } finally {
@@ -220,7 +228,18 @@ export default function History() {
                   </div>
                 </div>
 
-                {view === "results" && <Leaderboard drivers={drivers} />}
+                {view === "results" && (
+                  <div className="flex gap-5 items-start">
+                    <div className="flex-1 min-w-0">
+                      <Leaderboard drivers={drivers} />
+                    </div>
+                    {rcMessages.length > 0 && (
+                      <div className="w-72 flex-shrink-0">
+                        <RaceControlCard messages={rcMessages} />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {view === "chart" && (
                   loadingChart

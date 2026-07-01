@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import SessionHeader from "@/components/SessionHeader"
-import RaceControl from "@/components/RaceControl"
+import RaceControlCard from "@/components/RaceControlCard"
 import Leaderboard from "@/components/Leaderboard"
 import Schedule from "@/components/Schedule"
 import History from "@/components/History"
@@ -21,7 +21,7 @@ export default function Page() {
 
   return (
     <main className="bg-gray-950 text-gray-100 min-h-screen p-6 font-mono">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <SessionHeader session={session} />
 
         <div className="flex gap-1 mb-5 border-b border-gray-800">
@@ -62,16 +62,22 @@ export default function Page() {
         )}
 
         {tab === "leaderboard" && (
-          <>
-            {isLive && <RaceControl messages={raceControl} />}
-            {drivers.length > 0
-              ? <Leaderboard drivers={drivers} />
-              : <LeaderboardSkeleton />
-            }
-            {lastUpdated && !error && (
-              <p className="text-gray-700 text-xs mt-4">Updated {lastUpdated}</p>
+          <div className="flex gap-5 items-start">
+            <div className="flex-1 min-w-0">
+              {drivers.length > 0
+                ? <Leaderboard drivers={drivers} />
+                : <LeaderboardSkeleton />
+              }
+              {lastUpdated && !error && (
+                <p className="text-gray-700 text-xs mt-4">Updated {lastUpdated}</p>
+              )}
+            </div>
+            {raceControl.length > 0 && (
+              <div className="w-72 flex-shrink-0">
+                <RaceControlCard messages={raceControl} live={isLive} />
+              </div>
             )}
-          </>
+          </div>
         )}
 
         {tab === "schedule" && <Schedule data={schedule} />}

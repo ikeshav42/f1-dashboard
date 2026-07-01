@@ -160,11 +160,30 @@ async def fetch_leaderboard():
     return build_leaderboard(pos, ivs, laps, drivers, stints, pits)
 
 
+def _format_rc_msgs(data):
+    msgs = sorted(data, key=lambda m: m.get("date", ""), reverse=True)
+    return [
+        {
+            "flag":       m.get("flag", ""),
+            "message":    m.get("message", ""),
+            "date":       m.get("date", ""),
+            "lap_number": m.get("lap_number"),
+            "category":   m.get("category", ""),
+        }
+        for m in msgs
+    ]
+
+
 async def fetch_race_control():
     async with httpx.AsyncClient() as client:
         data = await _get(client, "/race_control", {"session_key": "latest"})
-    msgs = sorted(data, key=lambda m: m.get("date", ""), reverse=True)
-    return [{"flag": m.get("flag", ""), "message": m.get("message", ""), "date": m.get("date", "")} for m in msgs[:3]]
+    return _format_rc_msgs(data)
+
+
+async def fetch_race_control_for_session(session_key: int):
+    async with httpx.AsyncClient() as client:
+        data = await _get(client, "/race_control", {"session_key": session_key})
+    return _format_rc_msgs(data)
 
 
 async def fetch_session():
