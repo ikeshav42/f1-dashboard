@@ -460,19 +460,23 @@ def _split_qualifying_segments(laps, rc_messages):
 
 
 async def fetch_qualifying_segments(session_key):
+    # sequential requests to stay under the 30/min rate limit
     async with httpx.AsyncClient() as client:
-        laps, drivers, stints, rc = await asyncio.gather(
-            _get(client, "/laps",         {"session_key": session_key}),
-            _get(client, "/drivers",      {"session_key": session_key}),
-            _get(client, "/stints",       {"session_key": session_key}),
-            _get(client, "/race_control", {"session_key": session_key}),
-        )
+        laps    = await _get(client, "/laps",         {"session_key": session_key})
+        await asyncio.sleep(0.5)
+        drivers = await _get(client, "/drivers",      {"session_key": session_key})
+        await asyncio.sleep(0.5)
+        stints  = await _get(client, "/stints",       {"session_key": session_key})
+        await asyncio.sleep(0.5)
+        rc      = await _get(client, "/race_control", {"session_key": session_key})
 
     q1_laps, q2_laps, q3_laps = _split_qualifying_segments(laps, rc)
     return {
-        "q1": build_timed_leaderboard(q1_laps, drivers, stints),
-        "q2": build_timed_leaderboard(q2_laps, drivers, stints),
-        "q3": build_timed_leaderboard(q3_laps, drivers, stints),
+        "overall":       build_timed_leaderboard(laps, drivers, stints),
+        "q1":            build_timed_leaderboard(q1_laps, drivers, stints),
+        "q2":            build_timed_leaderboard(q2_laps, drivers, stints),
+        "q3":            build_timed_leaderboard(q3_laps, drivers, stints),
+        "race_control":  _format_rc_msgs(rc),
     }
 
 

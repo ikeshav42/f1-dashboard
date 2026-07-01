@@ -65,7 +65,7 @@ export default function History() {
   const [loadingChart, setLoadingChart] = useState(false)
   const [view, setView]                 = useState<ViewMode>("results")
   const [error, setError]               = useState("")
-  const [qualiData, setQualiData]       = useState<Record<QualiSeg, any[]> | null>(null)
+  const [qualiData, setQualiData]       = useState<(Record<QualiSeg, any[]> & { overall: any[]; race_control: any[] }) | null>(null)
   const [qualiSeg, setQualiSeg]         = useState<QualiSeg>("q3")
 
   useEffect(() => {
@@ -118,15 +118,12 @@ export default function History() {
     setLoading(true)
     try {
       if (isQualifying(s.session_type)) {
-        const [lbRes, rcRes, qRes] = await Promise.all([
-          fetch(API + "/api/history/leaderboard?session_key=" + s.session_key, { cache: "no-store" }),
-          fetch(API + "/api/history/race_control?session_key=" + s.session_key),
-          fetch(API + "/api/history/qualifying?session_key=" + s.session_key),
-        ])
-        const [lb, rc, qd] = await Promise.all([lbRes.json(), rcRes.json(), qRes.json()])
-        setDrivers(lb)
-        setRcMessages(rc)
+        // single request returns segments + overall + race control to avoid rate limits
+        const res = await fetch(API + "/api/history/qualifying?session_key=" + s.session_key)
+        const qd = await res.json()
         setQualiData(qd)
+        setDrivers(qd.overall ?? [])
+        setRcMessages(qd.race_control ?? [])
       } else {
         const [lbRes, rcRes] = await Promise.all([
           fetch(API + "/api/history/leaderboard?session_key=" + s.session_key, { cache: "no-store" }),
