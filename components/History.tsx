@@ -55,6 +55,7 @@ export default function History() {
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
   const [rcMessages, setRcMessages]     = useState<RcMessage[]>([])
   const [showRC, setShowRC]             = useState(true)
+  const [expanded, setExpanded]         = useState(false)
   const [loading, setLoading]           = useState(false)
   const [loadingChart, setLoadingChart] = useState(false)
   const [view, setView]                 = useState<ViewMode>("results")
@@ -101,6 +102,7 @@ export default function History() {
     setLapData(null)
     setRcMessages([])
     setShowRC(true)
+    setExpanded(false)
     setError("")
     setView("results")
     setLoading(true)
@@ -138,8 +140,8 @@ export default function History() {
 
   return (
     <div className="flex gap-6 mt-1">
-      {/* Meeting list */}
-      <div className="w-56 flex-shrink-0">
+      {/* Meeting list — hidden when chart is expanded */}
+      <div className={`w-56 flex-shrink-0 ${expanded && view === "chart" ? "hidden" : ""}`}>
         <p className="text-gray-500 text-xs uppercase tracking-widest mb-2">Grand Prix</p>
         <div className="space-y-0.5 max-h-[70vh] overflow-y-auto pr-1">
           {meetings.map(m => (
@@ -227,7 +229,7 @@ export default function History() {
                     >
                       Lap Chart
                     </button>
-                    {view === "results" && rcMessages.length > 0 && (
+                    {rcMessages.length > 0 && (
                       <button
                         onClick={() => setShowRC(v => !v)}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
@@ -238,6 +240,18 @@ export default function History() {
                       >
                         <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
                         Race Control
+                      </button>
+                    )}
+                    {view === "chart" && (
+                      <button
+                        onClick={() => setExpanded(v => !v)}
+                        className={`px-3 py-1 rounded transition-colors ${
+                          expanded
+                            ? "bg-gray-700 text-white"
+                            : "text-gray-500 hover:text-gray-300"
+                        }`}
+                      >
+                        {expanded ? "Collapse" : "Expand"}
                       </button>
                     )}
                   </div>
@@ -257,11 +271,21 @@ export default function History() {
                 )}
 
                 {view === "chart" && (
-                  loadingChart
-                    ? <LeaderboardSkeleton />
-                    : lapData !== null && lapData.drivers.length > 0
-                      ? <LapChart driverLaps={lapData.drivers} events={lapData.events} />
-                      : <p className="text-gray-600 text-sm">No lap data available</p>
+                  <div className="flex gap-5 items-start">
+                    <div className="flex-1 min-w-0">
+                      {loadingChart
+                        ? <LeaderboardSkeleton />
+                        : lapData !== null && lapData.drivers.length > 0
+                          ? <LapChart driverLaps={lapData.drivers} events={lapData.events} />
+                          : <p className="text-gray-600 text-sm">No lap data available</p>
+                      }
+                    </div>
+                    {showRC && rcMessages.length > 0 && !expanded && (
+                      <div className="w-72 flex-shrink-0">
+                        <RaceControlCard messages={rcMessages} />
+                      </div>
+                    )}
+                  </div>
                 )}
               </>
             )}
