@@ -1,9 +1,7 @@
 {
-  "framework": "nextjs",
   "functions": {
     "api/**/*.py": {
       "runtime": "python3.12"
     }
-  },
-  "ignoreCommand": "exit 0"
+  }
 }
