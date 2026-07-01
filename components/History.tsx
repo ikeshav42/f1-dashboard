@@ -5,7 +5,7 @@ import Leaderboard from "./Leaderboard"
 import LapChart from "./LapChart"
 import { LeaderboardSkeleton } from "./Skeleton"
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+const API = process.env.NEXT_PUBLIC_API_URL ?? ""
 
 interface Meeting {
   meeting_key: number
