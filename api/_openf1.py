@@ -306,19 +306,174 @@ async def fetch_sessions_for_meeting(meeting_key):
     return sessions
 
 
+def build_timed_leaderboard(laps, drivers, stints):
+    """For qualifying and practice: rank by best lap, compute gaps from lap delta."""
+    driver_map = {d["driver_number"]: d for d in drivers if "driver_number" in d}
+
+    # keep the last stint per driver (most recent compound)
+    stint_map = {}
+    for s in stints:
+        num = s.get("driver_number")
+        if num is None:
+            continue
+        if num not in stint_map or s.get("stint_number", 0) > stint_map[num].get("stint_number", 0):
+            stint_map[num] = s
+
+    # find best (minimum) timed lap per driver
+    best_map = {}
+    for lap in laps:
+        num      = lap.get("driver_number")
+        duration = lap.get("lap_duration")
+        if num is None or duration is None:
+            continue
+        try:
+            t = float(duration)
+        except (ValueError, TypeError):
+            continue
+        if num not in best_map or t < float(best_map[num]["lap_duration"]):
+            best_map[num] = lap
+
+    if not best_map:
+        return []
+
+    ranked = sorted(best_map.items(), key=lambda x: float(x[1]["lap_duration"]))
+    pole_time = float(ranked[0][1]["lap_duration"])
+
+    rows = []
+    prev_time = pole_time
+    for pos_idx, (num, lap) in enumerate(ranked):
+        d     = driver_map.get(num, {})
+        stint = stint_map.get(num, {})
+        team  = d.get("team_name", "—")
+        t     = float(lap["lap_duration"])
+        gap   = t - pole_time
+        ivl   = t - prev_time
+        prev_time = t
+        rows.append({
+            "position":      pos_idx + 1,
+            "driver_number": num,
+            "driver_name":   d.get("full_name") or d.get("last_name", "—"),
+            "driver_abbr":   d.get("name_acronym", "???"),
+            "team_name":     team,
+            "team_color":    TEAM_COLORS.get(team, "#FFFFFF"),
+            "gap_to_leader": "—" if gap == 0 else f"+{gap:.3f}",
+            "interval":      "—" if ivl == 0 else f"+{ivl:.3f}",
+            "last_lap_time": _fmt_lap(lap.get("lap_duration")),
+            "sector_1":      _fmt_sector(lap.get("duration_sector_1")),
+            "sector_2":      _fmt_sector(lap.get("duration_sector_2")),
+            "sector_3":      _fmt_sector(lap.get("duration_sector_3")),
+            "tyre_compound": (stint.get("compound") or "—").upper(),
+            "is_in_pit":     False,
+        })
+    return rows
+
+
 async def fetch_history_leaderboard(session_key):
+    # fetch session type and driver info first
     async with httpx.AsyncClient() as client:
-        pos, ivs, drivers = await asyncio.gather(
-            _get(client, "/position",  {"session_key": session_key}),
-            _get(client, "/intervals", {"session_key": session_key}),
-            _get(client, "/drivers",   {"session_key": session_key}),
+        sessions_data, drivers = await asyncio.gather(
+            _get(client, "/sessions", {"session_key": session_key}),
+            _get(client, "/drivers",  {"session_key": session_key}),
         )
-        laps, pits, stints = await asyncio.gather(
-            _get(client, "/laps",   {"session_key": session_key}),
-            _get(client, "/pit",    {"session_key": session_key}),
-            _get(client, "/stints", {"session_key": session_key}),
+
+    stype = (sessions_data[0].get("session_type", "") if sessions_data else "").lower()
+    # practice, qualifying, sprint qualifying, sprint shootout → use best-lap ranking
+    use_timed = stype not in ("race", "sprint")
+
+    if use_timed:
+        async with httpx.AsyncClient() as client:
+            laps, stints = await asyncio.gather(
+                _get(client, "/laps",   {"session_key": session_key}),
+                _get(client, "/stints", {"session_key": session_key}),
+            )
+        return build_timed_leaderboard(laps, drivers, stints)
+    else:
+        async with httpx.AsyncClient() as client:
+            pos, ivs = await asyncio.gather(
+                _get(client, "/position",  {"session_key": session_key}),
+                _get(client, "/intervals", {"session_key": session_key}),
+            )
+            laps, pits, stints = await asyncio.gather(
+                _get(client, "/laps",   {"session_key": session_key}),
+                _get(client, "/pit",    {"session_key": session_key}),
+                _get(client, "/stints", {"session_key": session_key}),
+            )
+        return build_leaderboard(pos, ivs, laps, drivers, stints, pits)
+
+
+def _split_qualifying_segments(laps, rc_messages):
+    """Split qualifying laps into [q1_laps, q2_laps, q3_laps] using RC green/chequered boundaries."""
+    boundaries = []
+    for m in rc_messages:
+        flag = (m.get("flag") or "").upper()
+        date = m.get("date", "")
+        if date and flag in ("GREEN", "CHEQUERED"):
+            boundaries.append({"type": flag, "date": date})
+    boundaries.sort(key=lambda x: x["date"])
+
+    segments = []  # list of (start_date, end_date) strings
+    i = 0
+    while i < len(boundaries) and len(segments) < 3:
+        if boundaries[i]["type"] == "GREEN":
+            start = boundaries[i]["date"]
+            j = i + 1
+            while j < len(boundaries) and boundaries[j]["type"] != "CHEQUERED":
+                j += 1
+            if j < len(boundaries):
+                segments.append((start, boundaries[j]["date"]))
+                i = j + 1
+            else:
+                i += 1
+        else:
+            i += 1
+
+    if len(segments) >= 2:
+        q_laps = [[], [], []]
+        for lap in laps:
+            lap_date = lap.get("date_start", "")
+            if not lap_date:
+                continue
+            for idx, (start, end) in enumerate(segments):
+                if start <= lap_date <= end:
+                    q_laps[idx].append(lap)
+                    break
+        return q_laps
+
+    # fallback: split by time gaps > 4 minutes between consecutive lap dates
+    timed = sorted([l for l in laps if l.get("date_start")], key=lambda x: x["date_start"])
+    if not timed:
+        return [laps, [], []]
+    groups = [[timed[0]]]
+    for k in range(1, len(timed)):
+        try:
+            prev_dt = datetime.fromisoformat(timed[k-1]["date_start"].replace("Z", "+00:00"))
+            curr_dt = datetime.fromisoformat(timed[k]["date_start"].replace("Z", "+00:00"))
+            gap = (curr_dt - prev_dt).total_seconds()
+        except Exception:
+            gap = 0
+        if gap > 240 and len(groups) < 3:
+            groups.append([])
+        groups[-1].append(timed[k])
+    while len(groups) < 3:
+        groups.append([])
+    return groups[:3]
+
+
+async def fetch_qualifying_segments(session_key):
+    async with httpx.AsyncClient() as client:
+        laps, drivers, stints, rc = await asyncio.gather(
+            _get(client, "/laps",         {"session_key": session_key}),
+            _get(client, "/drivers",      {"session_key": session_key}),
+            _get(client, "/stints",       {"session_key": session_key}),
+            _get(client, "/race_control", {"session_key": session_key}),
         )
-    return build_leaderboard(pos, ivs, laps, drivers, stints, pits)
+
+    q1_laps, q2_laps, q3_laps = _split_qualifying_segments(laps, rc)
+    return {
+        "q1": build_timed_leaderboard(q1_laps, drivers, stints),
+        "q2": build_timed_leaderboard(q2_laps, drivers, stints),
+        "q3": build_timed_leaderboard(q3_laps, drivers, stints),
+    }
 
 
 async def fetch_lap_times(session_key):
