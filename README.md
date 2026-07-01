@@ -42,11 +42,3 @@ OpenF1 API  ←—— Python serverless functions (api/)  ←—— Next.js fron
 ```
 
 Each `api/*.py` file is a Vercel serverless function. Vercel CDN caches responses (15s for live data, 1h+ for historical) so the OpenF1 rate limit is never an issue.
-
-## Things I learned
-
-- Vercel Python serverless functions alongside a Next.js app
-- CDN caching with `Cache-Control: s-maxage` to avoid hitting rate limits
-- Recharts for data viz — filtering pit laps, detecting SC/VSC from race control messages
-- Next.js custom hooks to keep page components clean
-- OpenF1 quirks (null lap durations on the final lap, session_key=latest behaviour across endpoints)
