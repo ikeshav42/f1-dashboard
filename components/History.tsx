@@ -45,6 +45,11 @@ function formatDate(iso: string) {
 }
 
 type ViewMode = "results" | "chart"
+type QualiSeg = "q1" | "q2" | "q3"
+
+function isQualifying(session_type: string) {
+  return session_type.toLowerCase().includes("qualifying")
+}
 
 export default function History() {
   const [meetings, setMeetings]         = useState<Meeting[]>([])
@@ -60,6 +65,8 @@ export default function History() {
   const [loadingChart, setLoadingChart] = useState(false)
   const [view, setView]                 = useState<ViewMode>("results")
   const [error, setError]               = useState("")
+  const [qualiData, setQualiData]       = useState<Record<QualiSeg, any[]> | null>(null)
+  const [qualiSeg, setQualiSeg]         = useState<QualiSeg>("q3")
 
   useEffect(() => {
     fetch(API + "/api/history/meetings")
@@ -83,6 +90,7 @@ export default function History() {
     setSelectedSession(null)
     setDrivers([])
     setLapData(null)
+    setQualiData(null)
     setError("")
     setView("results")
     setLoading(true)
@@ -101,19 +109,33 @@ export default function History() {
     setDrivers([])
     setLapData(null)
     setRcMessages([])
+    setQualiData(null)
+    setQualiSeg("q3")
     setShowRC(true)
     setExpanded(false)
     setError("")
     setView("results")
     setLoading(true)
     try {
-      const [lbRes, rcRes] = await Promise.all([
-        fetch(API + "/api/history/leaderboard?session_key=" + s.session_key, { cache: "no-store" }),
-        fetch(API + "/api/history/race_control?session_key=" + s.session_key),
-      ])
-      const [lb, rc] = await Promise.all([lbRes.json(), rcRes.json()])
-      setDrivers(lb)
-      setRcMessages(rc)
+      if (isQualifying(s.session_type)) {
+        const [lbRes, rcRes, qRes] = await Promise.all([
+          fetch(API + "/api/history/leaderboard?session_key=" + s.session_key, { cache: "no-store" }),
+          fetch(API + "/api/history/race_control?session_key=" + s.session_key),
+          fetch(API + "/api/history/qualifying?session_key=" + s.session_key),
+        ])
+        const [lb, rc, qd] = await Promise.all([lbRes.json(), rcRes.json(), qRes.json()])
+        setDrivers(lb)
+        setRcMessages(rc)
+        setQualiData(qd)
+      } else {
+        const [lbRes, rcRes] = await Promise.all([
+          fetch(API + "/api/history/leaderboard?session_key=" + s.session_key, { cache: "no-store" }),
+          fetch(API + "/api/history/race_control?session_key=" + s.session_key),
+        ])
+        const [lb, rc] = await Promise.all([lbRes.json(), rcRes.json()])
+        setDrivers(lb)
+        setRcMessages(rc)
+      }
     } catch {
       setError("Could not load session data")
     } finally {
@@ -124,7 +146,7 @@ export default function History() {
   async function loadChart() {
     if (!selectedSession) return
     setView("chart")
-    if (lapData !== null) return   // already loaded
+    if (lapData !== null) return
     setLoadingChart(true)
     try {
       const res = await fetch(API + "/api/history/laps?session_key=" + selectedSession.session_key)
@@ -136,7 +158,9 @@ export default function History() {
     }
   }
 
-  const hasResults = !loading && drivers.length > 0
+  const hasResults    = !loading && drivers.length > 0
+  const isQuali       = selectedSession ? isQualifying(selectedSession.session_type) : false
+  const displayDrivers = isQuali && qualiData ? (qualiData[qualiSeg] ?? []) : drivers
 
   return (
     <div className="flex gap-6 mt-1">
@@ -198,27 +222,50 @@ export default function History() {
 
             {hasResults && (
               <>
-                {/* sub-view toggle: Results | Lap Chart */}
+                {/* toolbar */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <p className="text-gray-600 text-xs">
                       {selectedSession?.session_name} · {formatDate(selectedSession?.date_start ?? "")}
                     </p>
-                    <p className="text-yellow-500 text-xs font-semibold">
-                      🏆 {drivers[0].driver_abbr} — {drivers[0].team_name}
-                    </p>
+                    {displayDrivers.length > 0 && (
+                      <p className="text-yellow-500 text-xs font-semibold">
+                        🏆 {displayDrivers[0].driver_abbr} — {displayDrivers[0].team_name}
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-1 text-xs">
-                    <button
-                      onClick={() => setView("results")}
-                      className={`px-3 py-1 rounded transition-colors ${
-                        view === "results"
-                          ? "bg-gray-700 text-white"
-                          : "text-gray-500 hover:text-gray-300"
-                      }`}
-                    >
-                      Results
-                    </button>
+                    {/* Q1/Q2/Q3 toggles for qualifying sessions */}
+                    {isQuali && qualiData && (
+                      <>
+                        {(["q1", "q2", "q3"] as QualiSeg[]).map(seg => (
+                          <button
+                            key={seg}
+                            onClick={() => { setView("results"); setQualiSeg(seg) }}
+                            className={`px-3 py-1 rounded transition-colors ${
+                              view === "results" && qualiSeg === seg
+                                ? "bg-red-700 text-white"
+                                : "text-gray-500 hover:text-gray-300"
+                            }`}
+                          >
+                            {seg.toUpperCase()}
+                          </button>
+                        ))}
+                        <div className="w-px bg-gray-800 mx-1" />
+                      </>
+                    )}
+                    {!isQuali && (
+                      <button
+                        onClick={() => setView("results")}
+                        className={`px-3 py-1 rounded transition-colors ${
+                          view === "results"
+                            ? "bg-gray-700 text-white"
+                            : "text-gray-500 hover:text-gray-300"
+                        }`}
+                      >
+                        Results
+                      </button>
+                    )}
                     <button
                       onClick={loadChart}
                       className={`px-3 py-1 rounded transition-colors ${
@@ -260,7 +307,7 @@ export default function History() {
                 {view === "results" && (
                   <div className="flex gap-5 items-start">
                     <div className="flex-1 min-w-0">
-                      <Leaderboard drivers={drivers} />
+                      <Leaderboard drivers={displayDrivers} />
                     </div>
                     {showRC && rcMessages.length > 0 && (
                       <div className="w-72 flex-shrink-0">
