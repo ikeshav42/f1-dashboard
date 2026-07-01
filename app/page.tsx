@@ -13,6 +13,7 @@ type Tab = "leaderboard" | "schedule" | "history"
 
 export default function Page() {
   const [tab, setTab] = useState<Tab>("leaderboard")
+  const [showRC, setShowRC] = useState(true)
   const { drivers, session, raceControl, schedule, lastUpdated, error } = useF1Data()
 
   const isLive = session.status === "LIVE"
@@ -62,22 +63,39 @@ export default function Page() {
         )}
 
         {tab === "leaderboard" && (
-          <div className="flex gap-5 items-start">
-            <div className="flex-1 min-w-0">
-              {drivers.length > 0
-                ? <Leaderboard drivers={drivers} />
-                : <LeaderboardSkeleton />
-              }
-              {lastUpdated && !error && (
-                <p className="text-gray-700 text-xs mt-4">Updated {lastUpdated}</p>
-              )}
-            </div>
+          <>
             {raceControl.length > 0 && (
-              <div className="w-72 flex-shrink-0">
-                <RaceControlCard messages={raceControl} live={isLive} />
+              <div className="flex justify-end mb-3">
+                <button
+                  onClick={() => setShowRC(v => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                    showRC
+                      ? "bg-gray-700 text-white"
+                      : "text-gray-500 hover:text-gray-300"
+                  }`}
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full ${isLive ? "bg-red-500" : "bg-gray-400"}`} />
+                  Race Control
+                </button>
               </div>
             )}
-          </div>
+            <div className="flex gap-5 items-start">
+              <div className="flex-1 min-w-0">
+                {drivers.length > 0
+                  ? <Leaderboard drivers={drivers} />
+                  : <LeaderboardSkeleton />
+                }
+                {lastUpdated && !error && (
+                  <p className="text-gray-700 text-xs mt-4">Updated {lastUpdated}</p>
+                )}
+              </div>
+              {showRC && raceControl.length > 0 && (
+                <div className="w-72 flex-shrink-0">
+                  <RaceControlCard messages={raceControl} live={isLive} />
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {tab === "schedule" && <Schedule data={schedule} />}

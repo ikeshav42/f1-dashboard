@@ -54,6 +54,7 @@ export default function History() {
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null)
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
   const [rcMessages, setRcMessages]     = useState<RcMessage[]>([])
+  const [showRC, setShowRC]             = useState(true)
   const [loading, setLoading]           = useState(false)
   const [loadingChart, setLoadingChart] = useState(false)
   const [view, setView]                 = useState<ViewMode>("results")
@@ -99,6 +100,7 @@ export default function History() {
     setDrivers([])
     setLapData(null)
     setRcMessages([])
+    setShowRC(true)
     setError("")
     setView("results")
     setLoading(true)
@@ -225,6 +227,19 @@ export default function History() {
                     >
                       Lap Chart
                     </button>
+                    {view === "results" && rcMessages.length > 0 && (
+                      <button
+                        onClick={() => setShowRC(v => !v)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
+                          showRC
+                            ? "bg-gray-700 text-white"
+                            : "text-gray-500 hover:text-gray-300"
+                        }`}
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                        Race Control
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -233,7 +248,7 @@ export default function History() {
                     <div className="flex-1 min-w-0">
                       <Leaderboard drivers={drivers} />
                     </div>
-                    {rcMessages.length > 0 && (
+                    {showRC && rcMessages.length > 0 && (
                       <div className="w-72 flex-shrink-0">
                         <RaceControlCard messages={rcMessages} />
                       </div>
