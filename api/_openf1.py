@@ -147,13 +147,15 @@ def extract_race_events(rc_messages):
 
 async def fetch_leaderboard():
     async with httpx.AsyncClient() as client:
-        pos, ivs, laps, pits, drivers, stints = await asyncio.gather(
+        pos, ivs, drivers = await asyncio.gather(
             _get(client, "/position",  {"session_key": "latest"}),
             _get(client, "/intervals", {"session_key": "latest"}),
-            _get(client, "/laps",      {"session_key": "latest"}),
-            _get(client, "/pit",       {"session_key": "latest"}),
             _get(client, "/drivers",   {"session_key": "latest"}),
-            _get(client, "/stints",    {"session_key": "latest"}),
+        )
+        laps, pits, stints = await asyncio.gather(
+            _get(client, "/laps",   {"session_key": "latest"}),
+            _get(client, "/pit",    {"session_key": "latest"}),
+            _get(client, "/stints", {"session_key": "latest"}),
         )
     return build_leaderboard(pos, ivs, laps, drivers, stints, pits)
 
@@ -287,13 +289,15 @@ async def fetch_sessions_for_meeting(meeting_key):
 
 async def fetch_history_leaderboard(session_key):
     async with httpx.AsyncClient() as client:
-        pos, ivs, laps, pits, drivers, stints = await asyncio.gather(
+        pos, ivs, drivers = await asyncio.gather(
             _get(client, "/position",  {"session_key": session_key}),
             _get(client, "/intervals", {"session_key": session_key}),
-            _get(client, "/laps",      {"session_key": session_key}),
-            _get(client, "/pit",       {"session_key": session_key}),
             _get(client, "/drivers",   {"session_key": session_key}),
-            _get(client, "/stints",    {"session_key": session_key}),
+        )
+        laps, pits, stints = await asyncio.gather(
+            _get(client, "/laps",   {"session_key": session_key}),
+            _get(client, "/pit",    {"session_key": session_key}),
+            _get(client, "/stints", {"session_key": session_key}),
         )
     return build_leaderboard(pos, ivs, laps, drivers, stints, pits)
 
