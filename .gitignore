@@ -29,10 +29,7 @@ yarn-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# editor / tool config — not part of the project
-CLAUDE.md
-AGENTS.md
-PLAN.md
-nextjs/
-frontend/
+# local dev files not part of the project
+*.local.md
 tui.py
+backend/
