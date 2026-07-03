@@ -35,6 +35,16 @@ async def _get(client, path, params=None):
     return []
 
 
+async def _get_live(client, path, params=None):
+    try:
+        r = await client.get(BASE + path, params=params, timeout=6)
+        if not r.is_success:
+            return []
+        return r.json()
+    except Exception:
+        return []
+
+
 def _fmt_gap(value):
     if value is None:
         return "—"
@@ -152,16 +162,15 @@ def extract_race_events(rc_messages):
 async def fetch_leaderboard():
     async with httpx.AsyncClient() as client:
         pos, ivs, drivers = await asyncio.gather(
-            _get(client, "/position",  {"session_key": "latest"}),
-            _get(client, "/intervals", {"session_key": "latest"}),
-            _get(client, "/drivers",   {"session_key": "latest"}),
+            _get_live(client, "/position",  {"session_key": "latest"}),
+            _get_live(client, "/intervals", {"session_key": "latest"}),
+            _get_live(client, "/drivers",   {"session_key": "latest"}),
         )
-        laps, pits, stints = await asyncio.gather(
-            _get(client, "/laps",   {"session_key": "latest"}),
-            _get(client, "/pit",    {"session_key": "latest"}),
-            _get(client, "/stints", {"session_key": "latest"}),
+        pits, stints = await asyncio.gather(
+            _get_live(client, "/pit",    {"session_key": "latest"}),
+            _get_live(client, "/stints", {"session_key": "latest"}),
         )
-    return build_leaderboard(pos, ivs, laps, drivers, stints, pits)
+    return build_leaderboard(pos, ivs, [], drivers, stints, pits)
 
 
 def _format_rc_msgs(data):

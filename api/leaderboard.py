@@ -7,7 +7,7 @@ from _openf1 import fetch_leaderboard
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         data = asyncio.run(fetch_leaderboard())
-        self._send(data, ttl=15)
+        self._send(data, ttl=30)
 
     def _send(self, data, ttl=15):
         body = json.dumps(data).encode()
