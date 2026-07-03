@@ -161,13 +161,26 @@ def extract_race_events(rc_messages):
 
 async def fetch_leaderboard():
     async with httpx.AsyncClient() as client:
-        drivers = await _get_live(client, "/drivers", {"session_key": "latest"})
-        pos, ivs, stints = await asyncio.gather(
-            _get_live(client, "/position",  {"session_key": "latest"}),
-            _get_live(client, "/intervals", {"session_key": "latest"}),
-            _get_live(client, "/stints",    {"session_key": "latest"}),
+        sessions, drivers = await asyncio.gather(
+            _get_live(client, "/sessions", {"session_key": "latest"}),
+            _get_live(client, "/drivers",  {"session_key": "latest"}),
         )
-    return build_leaderboard(pos, ivs, [], drivers, stints, [])
+        session_type = (sessions[-1].get("session_type", "") if sessions else "").lower()
+        use_timed = session_type not in ("race", "sprint")
+
+        if use_timed:
+            laps, stints = await asyncio.gather(
+                _get_live(client, "/laps",   {"session_key": "latest"}),
+                _get_live(client, "/stints", {"session_key": "latest"}),
+            )
+            return build_timed_leaderboard(laps, drivers, stints)
+        else:
+            pos, ivs, stints = await asyncio.gather(
+                _get_live(client, "/position",  {"session_key": "latest"}),
+                _get_live(client, "/intervals", {"session_key": "latest"}),
+                _get_live(client, "/stints",    {"session_key": "latest"}),
+            )
+            return build_leaderboard(pos, ivs, [], drivers, stints, [])
 
 
 def _format_rc_msgs(data):
