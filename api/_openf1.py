@@ -161,14 +161,12 @@ def extract_race_events(rc_messages):
 
 async def fetch_leaderboard():
     async with httpx.AsyncClient() as client:
-        pos, ivs, drivers, stints = await asyncio.gather(
+        drivers = await _get_live(client, "/drivers", {"session_key": "latest"})
+        pos, ivs, stints = await asyncio.gather(
             _get_live(client, "/position",  {"session_key": "latest"}),
             _get_live(client, "/intervals", {"session_key": "latest"}),
-            _get_live(client, "/drivers",   {"session_key": "latest"}),
             _get_live(client, "/stints",    {"session_key": "latest"}),
         )
-        if not drivers:
-            drivers = await _get_live(client, "/drivers", {"session_key": "latest"})
     return build_leaderboard(pos, ivs, [], drivers, stints, [])
 
 
