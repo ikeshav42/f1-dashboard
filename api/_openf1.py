@@ -21,14 +21,18 @@ TEAM_COLORS = {
 
 
 async def _get(client, path, params=None):
-    try:
-        r = await client.get(BASE + path, params=params, timeout=15)
-        if r.status_code == 429:
+    for attempt in range(3):
+        try:
+            if attempt > 0:
+                await asyncio.sleep(attempt * 1.5)
+            r = await client.get(BASE + path, params=params, timeout=15)
+            if r.status_code == 429:
+                continue
+            r.raise_for_status()
+            return r.json()
+        except Exception:
             return []
-        r.raise_for_status()
-        return r.json()
-    except Exception:
-        return []
+    return []
 
 
 def _fmt_gap(value):
