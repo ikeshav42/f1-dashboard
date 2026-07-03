@@ -37,7 +37,7 @@ async def _get(client, path, params=None):
 
 async def _get_live(client, path, params=None):
     try:
-        r = await client.get(BASE + path, params=params, timeout=6)
+        r = await client.get(BASE + path, params=params, timeout=4)
         if not r.is_success:
             return []
         return r.json()
@@ -167,6 +167,8 @@ async def fetch_leaderboard():
             _get_live(client, "/drivers",   {"session_key": "latest"}),
             _get_live(client, "/stints",    {"session_key": "latest"}),
         )
+        if not drivers:
+            drivers = await _get_live(client, "/drivers", {"session_key": "latest"})
     return build_leaderboard(pos, ivs, [], drivers, stints, [])
 
 
