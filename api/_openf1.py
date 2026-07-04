@@ -1,6 +1,6 @@
 import asyncio
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 BASE = "https://api.openf1.org/v1"
 
@@ -38,6 +38,16 @@ async def _get(client, path, params=None):
 async def _get_live(client, path, params=None):
     try:
         r = await client.get(BASE + path, params=params, timeout=4)
+        if not r.is_success:
+            return []
+        return r.json()
+    except Exception:
+        return []
+
+
+async def _get_live_slow(client, path, params=None):
+    try:
+        r = await client.get(BASE + path, params=params, timeout=6)
         if not r.is_success:
             return []
         return r.json()
@@ -175,9 +185,12 @@ async def fetch_leaderboard():
             )
             return build_timed_leaderboard(laps, drivers, stints)
         else:
+            # filter intervals to the last 7 minutes — keeps rows small whether
+            # the race is live or just finished (avoids 9k+ row downloads on completed sessions)
+            cutoff = (datetime.now(timezone.utc) - timedelta(minutes=7)).strftime("%Y-%m-%dT%H:%M:%S")
             pos, ivs, stints = await asyncio.gather(
                 _get_live(client, "/position",  {"session_key": "latest"}),
-                _get_live(client, "/intervals", {"session_key": "latest"}),
+                _get_live_slow(client, "/intervals", {"session_key": "latest", "date>": cutoff}),
                 _get_live(client, "/stints",    {"session_key": "latest"}),
             )
             return build_leaderboard(pos, ivs, [], drivers, stints, [])
