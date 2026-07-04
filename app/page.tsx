@@ -25,7 +25,9 @@ export default function Page() {
 
   const isLive = session.status === "LIVE"
 
-  if (isLive && tab !== "leaderboard") setTab("leaderboard")
+  useEffect(() => {
+    if (isLive) setTab("leaderboard")
+  }, [isLive])
 
   useEffect(() => {
     setLapData(null)

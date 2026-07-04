@@ -10,7 +10,7 @@ class handler(BaseHTTPRequestHandler):
         body = json.dumps(data).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Cache-Control", "s-maxage=15, stale-while-revalidate=30")
+        self.send_header("Cache-Control", "s-maxage=30, stale-while-revalidate=60")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)

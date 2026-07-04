@@ -31,7 +31,7 @@ async def _get(client, path, params=None):
             r.raise_for_status()
             return r.json()
         except Exception:
-            return []
+            continue
     return []
 
 
@@ -212,7 +212,7 @@ def _format_rc_msgs(data):
 
 async def fetch_race_control():
     async with httpx.AsyncClient() as client:
-        data = await _get(client, "/race_control", {"session_key": "latest"})
+        data = await _get_live(client, "/race_control", {"session_key": "latest"})
     return _format_rc_msgs(data)
 
 
@@ -224,7 +224,7 @@ async def fetch_race_control_for_session(session_key: int):
 
 async def fetch_session():
     async with httpx.AsyncClient() as client:
-        data = await _get(client, "/sessions", {"session_key": "latest"})
+        data = await _get_live(client, "/sessions", {"session_key": "latest"})
     if not data:
         return {}
     s = data[-1]
@@ -405,26 +405,22 @@ def build_timed_leaderboard(laps, drivers, stints):
 
 
 async def fetch_history_leaderboard(session_key):
-    # fetch session type and driver info first
     async with httpx.AsyncClient() as client:
         sessions_data, drivers = await asyncio.gather(
             _get(client, "/sessions", {"session_key": session_key}),
             _get(client, "/drivers",  {"session_key": session_key}),
         )
 
-    stype = (sessions_data[0].get("session_type", "") if sessions_data else "").lower()
-    # practice, qualifying, sprint qualifying, sprint shootout → use best-lap ranking
-    use_timed = stype not in ("race", "sprint")
+        stype = (sessions_data[0].get("session_type", "") if sessions_data else "").lower()
+        use_timed = stype not in ("race", "sprint")
 
-    if use_timed:
-        async with httpx.AsyncClient() as client:
+        if use_timed:
             laps, stints = await asyncio.gather(
                 _get(client, "/laps",   {"session_key": session_key}),
                 _get(client, "/stints", {"session_key": session_key}),
             )
-        return build_timed_leaderboard(laps, drivers, stints)
-    else:
-        async with httpx.AsyncClient() as client:
+            return build_timed_leaderboard(laps, drivers, stints)
+        else:
             pos, ivs = await asyncio.gather(
                 _get(client, "/position",  {"session_key": session_key}),
                 _get(client, "/intervals", {"session_key": session_key}),
@@ -434,7 +430,7 @@ async def fetch_history_leaderboard(session_key):
                 _get(client, "/pit",    {"session_key": session_key}),
                 _get(client, "/stints", {"session_key": session_key}),
             )
-        return build_leaderboard(pos, ivs, laps, drivers, stints, pits)
+            return build_leaderboard(pos, ivs, laps, drivers, stints, pits)
 
 
 def _split_qualifying_segments(laps, rc_messages):
