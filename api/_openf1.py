@@ -169,31 +169,45 @@ def extract_race_events(rc_messages):
 
 # ── live data ──────────────────────────────────────────────────────────────────
 
+def _interval_cutoff(positions):
+    """Return a cutoff timestamp 1 minute before the last position update.
+    This anchors the interval window to the actual session end rather than now,
+    so it works for both live races and sessions that finished hours ago."""
+    dates = [r.get("date", "") for r in positions if r.get("date")]
+    if not dates:
+        return (datetime.now(timezone.utc) - timedelta(minutes=7)).strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        dt = datetime.fromisoformat(max(dates).replace("Z", "+00:00"))
+        return (dt - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    except Exception:
+        return (datetime.now(timezone.utc) - timedelta(minutes=7)).strftime("%Y-%m-%dT%H:%M:%S")
+
+
 async def fetch_leaderboard():
     async with httpx.AsyncClient() as client:
-        sessions, drivers = await asyncio.gather(
-            _get_live(client, "/sessions", {"session_key": "latest"}),
-            _get_live(client, "/drivers",  {"session_key": "latest"}),
+        # Phase 1 — fetch everything needed before we can compute the interval window.
+        # positions is slowest (~4s) so run it in parallel with the others.
+        sessions, drivers, pos, stints = await asyncio.gather(
+            _get_live(client, "/sessions",  {"session_key": "latest"}),
+            _get_live(client, "/drivers",   {"session_key": "latest"}),
+            _get_live_slow(client, "/position", {"session_key": "latest"}),
+            _get_live(client, "/stints",    {"session_key": "latest"}),
         )
         session_type = (sessions[-1].get("session_type", "") if sessions else "").lower()
         use_timed = session_type not in ("race", "sprint")
 
         if use_timed:
-            laps, stints = await asyncio.gather(
-                _get_live(client, "/laps",   {"session_key": "latest"}),
-                _get_live(client, "/stints", {"session_key": "latest"}),
-            )
+            laps = await _get_live(client, "/laps", {"session_key": "latest"})
             return build_timed_leaderboard(laps, drivers, stints)
         else:
-            # filter intervals to the last 7 minutes — keeps rows small whether
-            # the race is live or just finished (avoids 9k+ row downloads on completed sessions)
-            cutoff = (datetime.now(timezone.utc) - timedelta(minutes=7)).strftime("%Y-%m-%dT%H:%M:%S")
-            pos, ivs, stints = await asyncio.gather(
-                _get_live(client, "/position",  {"session_key": "latest"}),
+            # Phase 2 — anchor the interval window to the last position timestamp so
+            # this works for both in-progress races and sessions that finished hours ago.
+            cutoff = _interval_cutoff(pos)
+            ivs, laps = await asyncio.gather(
                 _get_live_slow(client, "/intervals", {"session_key": "latest", "date>": cutoff}),
-                _get_live(client, "/stints",    {"session_key": "latest"}),
+                _get_live(client, "/laps",           {"session_key": "latest"}),
             )
-            return build_leaderboard(pos, ivs, [], drivers, stints, [])
+            return build_leaderboard(pos, ivs, laps, drivers, stints, [])
 
 
 def _format_rc_msgs(data):
