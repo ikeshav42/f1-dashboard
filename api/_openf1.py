@@ -189,23 +189,23 @@ async def fetch_leaderboard():
         # positions is slowest (~4s) so run it in parallel with the others.
         sessions, drivers, pos, stints = await asyncio.gather(
             _get_live(client, "/sessions",  {"session_key": "latest"}),
-            _get_live(client, "/drivers",   {"session_key": "latest"}),
-            _get_live_slow(client, "/position", {"session_key": "latest"}),
+            _get(client, "/drivers",        {"session_key": "latest"}),
+            _get(client, "/position",       {"session_key": "latest"}),
             _get_live(client, "/stints",    {"session_key": "latest"}),
         )
         session_type = (sessions[-1].get("session_type", "") if sessions else "").lower()
         use_timed = session_type not in ("race", "sprint")
 
         if use_timed:
-            laps = await _get_live(client, "/laps", {"session_key": "latest"})
+            laps = await _get(client, "/laps", {"session_key": "latest"})
             return build_timed_leaderboard(laps, drivers, stints)
         else:
             # Phase 2 — anchor the interval window to the last position timestamp so
             # this works for both in-progress races and sessions that finished hours ago.
             cutoff = _interval_cutoff(pos)
             ivs, laps = await asyncio.gather(
-                _get_live_slow(client, "/intervals", {"session_key": "latest", "date>": cutoff}),
-                _get_live(client, "/laps",           {"session_key": "latest"}),
+                _get(client, "/intervals", {"session_key": "latest", "date>": cutoff}),
+                _get(client, "/laps",      {"session_key": "latest"}),
             )
             return build_leaderboard(pos, ivs, laps, drivers, stints, [])
 
